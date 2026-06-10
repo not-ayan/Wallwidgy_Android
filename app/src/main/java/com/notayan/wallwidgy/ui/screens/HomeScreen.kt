@@ -108,6 +108,7 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = bgColor,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Column(
                 modifier = Modifier
@@ -250,7 +251,7 @@ fun HomeScreen(
                 LazyVerticalStaggeredGrid(
                     state = gridState, // Maintains scroll position
                     columns = StaggeredGridCells.Fixed(2),
-                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 34.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalItemSpacing = 16.dp,
                     modifier = Modifier.fillMaxSize()

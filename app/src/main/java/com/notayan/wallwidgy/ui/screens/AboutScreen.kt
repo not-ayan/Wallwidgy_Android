@@ -103,7 +103,7 @@ fun AboutScreen(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
                 .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 34.dp)
         ) {
             // Header navigation row
             Row(
@@ -131,6 +131,8 @@ fun AboutScreen(
             }
 
             VersionUpdatesCard(viewModel = viewModel, isSystemDark = isSystemDark)
+            Spacer(modifier = Modifier.height(16.dp))
+            WallpaperCountCard(viewModel = viewModel, isSystemDark = isSystemDark)
             Spacer(modifier = Modifier.height(24.dp))
 
             // Birthday Indicator Card
@@ -1117,7 +1119,7 @@ fun AboutScreen(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(0.dp))
         }
     }
 }
@@ -1421,6 +1423,58 @@ private fun VersionUpdatesCard(
                     }
                 }
                 else -> {}
+            }
+        }
+    }
+}
+
+@Composable
+private fun WallpaperCountCard(
+    viewModel: WallpaperViewModel,
+    isSystemDark: Boolean
+) {
+    val wallpaperCount by viewModel.wallpaperCount.collectAsState()
+    
+    GlassyCard(isSystemDark = isSystemDark) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Image,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = "Total Wallpapers",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSystemDark) Color.White else Color.Black
+                )
+                Text(
+                    text = "$wallpaperCount beautiful images curated for you",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Light,
+                    color = (if (isSystemDark) Color.White else Color.Black).copy(alpha = 0.6f)
+                )
             }
         }
     }

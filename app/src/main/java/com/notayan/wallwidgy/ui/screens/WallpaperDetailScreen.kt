@@ -58,6 +58,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -73,8 +76,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.notayan.wallwidgy.ui.components.shimmerEffect
 import com.notayan.wallwidgy.data.Wallpaper
 import com.notayan.wallwidgy.data.cacheUrl
 import com.notayan.wallwidgy.data.mainUrl
@@ -181,12 +186,6 @@ fun WallpaperDetailScreen(
     }
     val bottomPanelHeight = navigationBarsPadding + collapsedSheetHeight + 16.dp
 
-    val targetCardOffset = if (isFullScreen) {
-        0.dp
-    } else {
-        (topHeaderHeight - bottomPanelHeight) / 2
-    }
-
     // ── Vibrant Color Extraction & Accent Coloring ──
     val metaAccentColor = remember(currentWallpaper) {
         findVibrantColor(currentWallpaper.data?.primaryColors, null)
@@ -239,6 +238,15 @@ fun WallpaperDetailScreen(
         if (isVisible) 0.dp else (screenHeight + 100.dp),
         spring(stiffness = Spring.StiffnessLow), label = "botOff"
     )
+    val bottomSheetHeight by animateDpAsState(
+        if (isSheetExpanded) expandedSheetHeight else collapsedSheetHeight,
+        spring(stiffness = Spring.StiffnessLow), label = "sheetH"
+    )
+    val targetCardOffset = if (isFullScreen) {
+        0.dp
+    } else {
+        (topHeaderHeight - bottomPanelHeight) / 2
+    }
     val cardVerticalOffset by animateDpAsState(
         targetCardOffset,
         spring(stiffness = Spring.StiffnessLow), label = "cardOffset"
@@ -259,11 +267,6 @@ fun WallpaperDetailScreen(
     LaunchedEffect(showLikeAnimTrigger) {
         if (showLikeAnimTrigger) { delay(600); showLikeAnimTrigger = false }
     }
-
-    val bottomSheetHeight by animateDpAsState(
-        if (isSheetExpanded) expandedSheetHeight else collapsedSheetHeight,
-        spring(stiffness = Spring.StiffnessLow), label = "sheetH"
-    )
     val fullScreenProgress by animateFloatAsState(
         targetValue = if (isFullScreen) 1f else 0f,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
@@ -291,6 +294,22 @@ fun WallpaperDetailScreen(
         }
     }
 
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (isSheetExpanded && available.y > 20f) {
+                    isSheetExpanded = false
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
     val imageUrl = if (isHdLoaded)
         currentWallpaper.mainUrl
     else
@@ -307,8 +326,6 @@ fun WallpaperDetailScreen(
             ) {
                 if (isSheetExpanded) {
                     isSheetExpanded = false
-                } else {
-                    isFullScreen = !isFullScreen
                 }
             }
     ) {
@@ -350,8 +367,13 @@ fun WallpaperDetailScreen(
             val cardW: Dp
             val cardH: Dp
 
-            val usableWidth = maxWidth - 64.dp
-            val usableHeight = maxHeight - collapsedSheetHeight - 100.dp
+            val usableHeight = if (isFullScreen) {
+                maxHeight
+            } else {
+                maxHeight - collapsedSheetHeight - 100.dp
+            }
+            val usableWidth = if (isFullScreen) maxWidth else maxWidth - 64.dp
+
             if (usableWidth / usableHeight <= cardAspect) {
                 cardW = usableWidth; cardH = usableWidth / cardAspect
             } else {
@@ -405,7 +427,7 @@ fun WallpaperDetailScreen(
                                 )
                             }
                     ) {
-                        AsyncImage(
+                        SubcomposeAsyncImage(
                             model = ImageRequest.Builder(context)
                                 .data(imageUrl)
                                 .crossfade(true)
@@ -417,7 +439,15 @@ fun WallpaperDetailScreen(
                                     scaleX = scale; scaleY = scale
                                     translationX = offset.x; translationY = offset.y
                                 },
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.Crop,
+                            loading = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(if (isSystemInDarkTheme()) Color(0xFF141414) else Color(0xFFE2E4DC))
+                                        .shimmerEffect()
+                                )
+                            }
                         )
                     }
                 }
@@ -513,7 +543,7 @@ fun WallpaperDetailScreen(
                 icon = Icons.Default.HighQuality,
                 contentDescription = "Toggle HD",
                 isSystemDark = isSystemDark,
-                tint = if (isHdLoaded) displayAccentColor else null,
+                tint = if (isHdLoaded) displayAccentColor else Color.White.copy(alpha = 0.4f),
                 onClick = { isHdLoaded = !isHdLoaded }
             )
         }
@@ -528,7 +558,8 @@ fun WallpaperDetailScreen(
                 .height(bottomSheetHeight)
                 .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
                 .offset(y = bottomCardOffset)
-                .graphicsLayer { alpha = controlsAlpha },
+                .graphicsLayer { alpha = controlsAlpha }
+                .nestedScroll(nestedScrollConnection),
             shape = RoundedCornerShape(32.dp),
             color = sheetBgColor,
             border = BorderStroke(1.dp, sheetBorderColor),
@@ -546,7 +577,18 @@ fun WallpaperDetailScreen(
                     ) {
                         // Title and Close Row
                         Row(
-                            Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .pointerInput(Unit) {
+                                    detectDragGestures(
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            if (dragAmount.y > 15f) { // Swiped down
+                                                isSheetExpanded = false
+                                            }
+                                        }
+                                    )
+                                },
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.Top
                         ) {
@@ -695,7 +737,17 @@ fun WallpaperDetailScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                            .padding(horizontal = 20.dp, vertical = 16.dp)
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        if (dragAmount.y < -15f) { // Swiped up
+                                            isSheetExpanded = true
+                                        }
+                                    }
+                                )
+                            },
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         // Row 1: Title and Expand Details Button
@@ -1131,14 +1183,14 @@ private fun WallpaperInfoCard(
     val textColor = if (isSystemDark) Color.White else Color.Black
 
     val details = buildList {
-        add("Resolution" to wallpaper.resolution)
-        add("Orientation" to wallpaper.orientation)
+        add("RESOLUTION" to wallpaper.resolution.uppercase())
+        add("ORIENTATION" to wallpaper.orientation.toTitleCase())
         val style = wallpaper.data?.artStyle
-        if (!style.isNullOrBlank()) add("Art Style" to style)
+        if (!style.isNullOrBlank()) add("ART STYLE" to style.toTitleCase())
         val series = wallpaper.data?.series
-        if (!series.isNullOrBlank()) add("Series" to series)
+        if (!series.isNullOrBlank()) add("SERIES" to series.toTitleCase())
         val mood = wallpaper.data?.mood
-        if (!mood.isNullOrBlank()) add("Mood Theme" to mood)
+        if (!mood.isNullOrBlank()) add("MOOD THEME" to mood.toTitleCase())
     }
 
     Surface(
@@ -1445,6 +1497,12 @@ private fun getCleanTitle(wallpaper: Wallpaper): String {
         .replace("_", " ")
         .replace("-", " ")
         .split(" ")
+        .joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+}
+
+private fun String.toTitleCase(): String {
+    return this.split(" ")
+        .filter { it.isNotEmpty() }
         .joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
 }
 

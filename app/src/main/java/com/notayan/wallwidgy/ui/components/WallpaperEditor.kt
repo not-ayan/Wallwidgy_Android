@@ -240,6 +240,7 @@ fun WallpaperEditor(
                                 }
                             },
                             isSystemDark = isSystemDark,
+                            accentColor = accentColor,
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -290,6 +291,7 @@ private fun WheelSlider(
     onValueChange: (Int) -> Unit,
     onReset: () -> Unit,
     isSystemDark: Boolean,
+    accentColor: Color,
     modifier: Modifier = Modifier
 ) {
     var lastValue by remember { mutableIntStateOf(value) }
@@ -403,12 +405,14 @@ private fun WheelSlider(
                     }
                 }
                 
-                // Center pointer line
-                drawLine(
-                    color = tickColor,
-                    start = Offset(center, (height - height * 0.65f) / 2),
-                    end = Offset(center, (height + height * 0.65f) / 2),
-                    strokeWidth = 2.dp.toPx()
+                // Center pointer line (prominent slider marker in accentColor)
+                val indicatorWidth = 4.dp.toPx()
+                val indicatorHeight = height * 0.7f
+                drawRoundRect(
+                    color = accentColor,
+                    topLeft = Offset(center - indicatorWidth / 2, (height - indicatorHeight) / 2),
+                    size = Size(indicatorWidth, indicatorHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(indicatorWidth / 2)
                 )
             }
         }

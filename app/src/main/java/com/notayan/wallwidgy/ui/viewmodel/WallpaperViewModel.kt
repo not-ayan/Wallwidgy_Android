@@ -62,6 +62,10 @@ class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) :
 
     private val _allWallpapers = MutableStateFlow<List<Wallpaper>>(emptyList())
 
+    val wallpaperCount = _allWallpapers
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     val availableCategories: StateFlow<List<String>> = _allWallpapers.map { wallpapers ->
         wallpapers.map { it.category.removePrefix("#").trim() }
             .filter { it.isNotBlank() }

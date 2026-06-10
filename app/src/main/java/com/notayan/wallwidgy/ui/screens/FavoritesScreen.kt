@@ -28,6 +28,7 @@ fun FavoritesScreen(
 
     Scaffold(
         containerColor = bgColor,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             // Header for Favorites
             Box(
@@ -59,9 +60,9 @@ fun FavoritesScreen(
                 state = rememberLazyStaggeredGridState(),
                 columns = StaggeredGridCells.Adaptive(minSize = 160.dp),
                 contentPadding = PaddingValues(
-                    start = 16.dp,
+                    start = 20.dp,
                     end = 16.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 16.dp,
+                    bottom = 34.dp,
                     top = innerPadding.calculateTopPadding()
                 ),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

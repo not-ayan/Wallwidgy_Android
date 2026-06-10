@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -24,6 +26,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -93,9 +97,10 @@ class MainActivity : ComponentActivity() {
                             NavigationBar(
                                 containerColor = bgColor,
                                 tonalElevation = 0.dp,
+                                windowInsets = WindowInsets(0, 0, 0, 0),
                                 modifier = Modifier
-                                    .windowInsetsPadding(NavigationBarDefaults.windowInsets)
-                                    .height(68.dp)
+                                    .height(56.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                                    .windowInsetsPadding(WindowInsets.navigationBars)
                             ) {
                                 NavigationBarItem(
                                     selected = currentRoute == "home" || currentRoute == null,
@@ -157,7 +162,11 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(bottom = innerPadding.calculateBottomPadding()) // ONLY pad bottom for navigation bar
                     ) {
-                        composable("home") {
+                        composable(
+                            route = "home",
+                            enterTransition = { fadeIn(animationSpec = tween(220, easing = LinearOutSlowInEasing)) },
+                            exitTransition = { fadeOut(animationSpec = tween(220, easing = FastOutLinearInEasing)) }
+                        ) {
                             HomeScreen(viewModel = viewModel) { wallpaper ->
                                 try {
                                     val encodedFileName = URLEncoder.encode(wallpaper.fileName, StandardCharsets.UTF_8.toString())
@@ -167,7 +176,11 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        composable("favorites") {
+                        composable(
+                            route = "favorites",
+                            enterTransition = { fadeIn(animationSpec = tween(220, easing = LinearOutSlowInEasing)) },
+                            exitTransition = { fadeOut(animationSpec = tween(220, easing = FastOutLinearInEasing)) }
+                        ) {
                             FavoritesScreen(viewModel) { wallpaper ->
                                 try {
                                     val encodedFileName = URLEncoder.encode(wallpaper.fileName, StandardCharsets.UTF_8.toString())
@@ -177,7 +190,11 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        composable("about") {
+                        composable(
+                            route = "about",
+                            enterTransition = { fadeIn(animationSpec = tween(220, easing = LinearOutSlowInEasing)) },
+                            exitTransition = { fadeOut(animationSpec = tween(220, easing = FastOutLinearInEasing)) }
+                        ) {
                             AboutScreen(
                                 viewModel = viewModel,
                                 onNavigateHome = {
@@ -193,7 +210,28 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(
                             route = "detail/{fileName}",
-                            arguments = listOf(navArgument("fileName") { type = NavType.StringType })
+                            arguments = listOf(navArgument("fileName") { type = NavType.StringType }),
+                            enterTransition = {
+                                slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(300))
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.End,
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) + fadeOut(animationSpec = tween(300))
+                            },
+                            popEnterTransition = {
+                                fadeIn(animationSpec = tween(300))
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.End,
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) + fadeOut(animationSpec = tween(300))
+                            }
                         ) { backStackEntry ->
                             val fileName = backStackEntry.arguments?.getString("fileName")
                             val uiState by viewModel.uiState.collectAsState()

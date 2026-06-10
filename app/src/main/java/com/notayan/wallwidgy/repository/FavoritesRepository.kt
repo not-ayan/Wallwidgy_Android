@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "favorites")
 
@@ -25,31 +26,37 @@ class FavoritesRepository(private val context: Context) {
         .map { preferences ->
             preferences[FAVORITES_KEY] ?: emptySet()
         }
+        .distinctUntilChanged()
 
     val defaultIndexEnabled: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[DEFAULT_INDEX_ENABLED_KEY] ?: true
         }
+        .distinctUntilChanged()
 
     val customIndices: Flow<Set<String>> = context.dataStore.data
         .map { preferences ->
             preferences[CUSTOM_INDICES_KEY] ?: emptySet()
         }
+        .distinctUntilChanged()
 
     val enabledCustomIndices: Flow<Set<String>> = context.dataStore.data
         .map { preferences ->
             preferences[ENABLED_CUSTOM_INDICES_KEY] ?: emptySet()
         }
+        .distinctUntilChanged()
 
     val monetEnabled: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[MONET_ENABLED_KEY] ?: true
         }
+        .distinctUntilChanged()
 
     val customAccentColor: Flow<Int> = context.dataStore.data
         .map { preferences ->
             preferences[CUSTOM_ACCENT_COLOR_KEY] ?: 0xFF4C663B.toInt()
         }
+        .distinctUntilChanged()
 
     val recentColors: Flow<List<Int>> = context.dataStore.data
         .map { preferences ->
@@ -57,6 +64,7 @@ class FavoritesRepository(private val context: Context) {
             csv.split(",")
                 .mapNotNull { it.trim().substringAfter("0x").toLongOrNull(16)?.toInt() }
         }
+        .distinctUntilChanged()
 
     suspend fun toggleFavorite(fileName: String) {
         context.dataStore.edit { preferences ->
