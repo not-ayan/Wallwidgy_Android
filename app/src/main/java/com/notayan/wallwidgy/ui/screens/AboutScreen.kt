@@ -55,9 +55,13 @@ fun AboutScreen(
     val scrollState = rememberScrollState()
     val isSystemDark = isSystemInDarkTheme()
 
-    val defaultIndexEnabled by viewModel.defaultIndexEnabled.collectAsState()
-    val customIndices by viewModel.customIndices.collectAsState()
-    val enabledCustomIndices by viewModel.enabledCustomIndices.collectAsState()
+    val currentDefaultIndexEnabled by viewModel.defaultIndexEnabled.collectAsState()
+    val currentCustomIndices by viewModel.customIndices.collectAsState()
+    val currentEnabledCustomIndices by viewModel.enabledCustomIndices.collectAsState()
+
+    var localDefaultIndexEnabled by remember(currentDefaultIndexEnabled) { mutableStateOf(currentDefaultIndexEnabled) }
+    var localCustomIndices by remember(currentCustomIndices) { mutableStateOf(currentCustomIndices) }
+    var localEnabledCustomIndices by remember(currentEnabledCustomIndices) { mutableStateOf(currentEnabledCustomIndices) }
     
     var newIndexUrl by remember { mutableStateOf("") }
 
@@ -506,11 +510,10 @@ fun AboutScreen(
                                         modifier = Modifier.fillMaxWidth().padding(end = 8.dp)
                                     )
                                 }
-                                
-                                val isDefaultIndexToggleEnabled = customIndices.isNotEmpty()
+                                val isDefaultIndexToggleEnabled = localCustomIndices.isNotEmpty()
                                 Switch(
-                                    checked = defaultIndexEnabled,
-                                    onCheckedChange = { viewModel.setDefaultIndexEnabled(it) },
+                                    checked = localDefaultIndexEnabled,
+                                    onCheckedChange = { localDefaultIndexEnabled = it },
                                     enabled = isDefaultIndexToggleEnabled,
                                     colors = SwitchDefaults.colors(
                                         checkedThumbColor = MaterialTheme.colorScheme.primary,
@@ -530,7 +533,7 @@ fun AboutScreen(
                                 letterSpacing = 1.sp
                             )
 
-                            if (customIndices.isEmpty()) {
+                            if (localCustomIndices.isEmpty()) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -545,8 +548,8 @@ fun AboutScreen(
                                     )
                                 }
                             } else {
-                                customIndices.forEach { url ->
-                                    val isEnabled = enabledCustomIndices.contains(url)
+                                localCustomIndices.forEach { url ->
+                                    val isEnabled = localEnabledCustomIndices.contains(url)
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -583,7 +586,13 @@ fun AboutScreen(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Switch(
                                                 checked = isEnabled,
-                                                onCheckedChange = { viewModel.toggleCustomIndexEnabled(url) },
+                                                onCheckedChange = { isChecked ->
+                                                    localEnabledCustomIndices = if (isChecked) {
+                                                        localEnabledCustomIndices + url
+                                                    } else {
+                                                        localEnabledCustomIndices - url
+                                                    }
+                                                },
                                                 colors = SwitchDefaults.colors(
                                                     checkedThumbColor = MaterialTheme.colorScheme.primary,
                                                     checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
@@ -593,7 +602,13 @@ fun AboutScreen(
                                             Spacer(modifier = Modifier.width(4.dp))
                                             
                                             IconButton(
-                                                onClick = { viewModel.removeCustomIndex(url) }
+                                                onClick = {
+                                                    localCustomIndices = localCustomIndices - url
+                                                    localEnabledCustomIndices = localEnabledCustomIndices - url
+                                                    if (localCustomIndices.isEmpty()) {
+                                                        localDefaultIndexEnabled = true
+                                                    }
+                                                }
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Delete,
@@ -644,7 +659,9 @@ fun AboutScreen(
                                 Button(
                                     onClick = {
                                         if (newIndexUrl.isNotBlank()) {
-                                            viewModel.addCustomIndex(newIndexUrl.trim())
+                                            val trimmed = newIndexUrl.trim()
+                                            localCustomIndices = localCustomIndices + trimmed
+                                            localEnabledCustomIndices = localEnabledCustomIndices + trimmed
                                             newIndexUrl = ""
                                         }
                                     },
@@ -670,7 +687,7 @@ fun AboutScreen(
                             // GitHub Documentation / How to guide link (frontend design styling)
                             Spacer(modifier = Modifier.height(8.dp))
                             Surface(
-                                onClick = { openUrl(context, "https://github.com/not-ayan/storage") },
+                                onClick = { openUrl(context, "https://github.com/not-ayan/custom_index") },
                                 shape = RoundedCornerShape(12.dp),
                                 color = (if (isSystemDark) Color.White else Color.Black).copy(alpha = 0.04f),
                                 border = BorderStroke(1.dp, (if (isSystemDark) Color.White else Color.Black).copy(alpha = 0.08f)),
@@ -701,6 +718,40 @@ fun AboutScreen(
                                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                                         modifier = Modifier.size(14.dp)
                                     )
+                                }
+                            }
+
+                            // Save & Restart Button for Index Changes
+                            val indexChanges = localDefaultIndexEnabled != currentDefaultIndexEnabled ||
+                                    localCustomIndices != currentCustomIndices ||
+                                    localEnabledCustomIndices != currentEnabledCustomIndices
+                            if (indexChanges) {
+                                HorizontalDivider(color = (if (isSystemDark) Color.White else Color.Black).copy(alpha = if (isSystemDark) 0.06f else 0.08f))
+
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            viewModel.saveIndexSettings(localDefaultIndexEnabled, localCustomIndices, localEnabledCustomIndices)
+                                            restartApp(context)
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    ),
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(50.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Save & Restart", fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }

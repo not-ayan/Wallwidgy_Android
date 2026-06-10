@@ -216,6 +216,44 @@ class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) :
         }
     }
 
+    suspend fun saveIndexSettings(defaultEnabled: Boolean, custom: Set<String>, enabledCustom: Set<String>) {
+        val toRemove = mutableSetOf<String>()
+
+        if (!defaultEnabled && defaultIndexEnabled.value) {
+            val defaultBaseUrl = com.notayan.wallwidgy.network.WallpaperApi.BASE_URL
+            val defaultFavorites = _allWallpapers.value
+                .filter { it.baseUrl == defaultBaseUrl && _favorites.value.contains(it.fileName) }
+                .map { it.fileName }
+            toRemove.addAll(defaultFavorites)
+        }
+
+        val prevCustom = customIndices.value
+        val prevEnabledCustom = enabledCustomIndices.value
+
+        for (url in prevCustom) {
+            val indexUrl = if (url.endsWith("index.json")) url else {
+                if (url.endsWith("/")) "${url}index.json" else "$url/index.json"
+            }
+            val baseUrl = indexUrl.substringBeforeLast("index.json")
+
+            val wasEnabled = prevEnabledCustom.contains(url)
+            val isNowEnabled = custom.contains(url) && enabledCustom.contains(url)
+
+            if (wasEnabled && !isNowEnabled) {
+                val indexFavorites = _allWallpapers.value
+                    .filter { it.baseUrl == baseUrl && _favorites.value.contains(it.fileName) }
+                    .map { it.fileName }
+                toRemove.addAll(indexFavorites)
+            }
+        }
+
+        if (toRemove.isNotEmpty()) {
+            favoritesRepository.removeFavorites(toRemove)
+        }
+
+        favoritesRepository.saveIndexSettings(defaultEnabled, custom, enabledCustom)
+    }
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }

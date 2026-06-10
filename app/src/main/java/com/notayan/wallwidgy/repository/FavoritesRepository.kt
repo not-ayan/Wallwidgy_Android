@@ -105,10 +105,23 @@ class FavoritesRepository(private val context: Context) {
     suspend fun removeCustomIndex(url: String) {
         context.dataStore.edit { preferences ->
             val current = preferences[CUSTOM_INDICES_KEY] ?: emptySet()
-            preferences[CUSTOM_INDICES_KEY] = current - url
+            val newCustom = current - url
+            preferences[CUSTOM_INDICES_KEY] = newCustom
             
             val currentEnabled = preferences[ENABLED_CUSTOM_INDICES_KEY] ?: emptySet()
             preferences[ENABLED_CUSTOM_INDICES_KEY] = currentEnabled - url
+
+            if (newCustom.isEmpty()) {
+                preferences[DEFAULT_INDEX_ENABLED_KEY] = true
+            }
+        }
+    }
+
+    suspend fun saveIndexSettings(defaultEnabled: Boolean, custom: Set<String>, enabledCustom: Set<String>) {
+        context.dataStore.edit { preferences ->
+            preferences[DEFAULT_INDEX_ENABLED_KEY] = defaultEnabled
+            preferences[CUSTOM_INDICES_KEY] = custom
+            preferences[ENABLED_CUSTOM_INDICES_KEY] = enabledCustom
         }
     }
 
