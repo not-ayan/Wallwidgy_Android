@@ -13,6 +13,7 @@ Wallwidgy is a modern, high-performance Android wallpaper application built from
   - **Gesture-Driven Cropping**: Drag-to-crop overlay with responsive corner handles.
 - **Dynamic Theme Coloring (Monet)**: Fully supports Android 12+ Monet engine to extract and apply colors from your device's wallpaper as accent themes, plus a custom color picker for custom themes.
 - **Offline Favorites & Downloads**: Build your personal collection by saving wallpapers to a local database, or download them directly to your gallery via standard `DownloadManager`.
+- **Custom Wallpaper Sources**: Add and manage custom JSON index repositories. Toggle the default system library or append custom index files to stream wallpapers from multiple repositories.
 - **Integrated Auto-Updater**: Directly query updates from GitHub releases, showing interactive download progress bars and launching installation packages seamlessly from the About screen.
 
 ## Installation
