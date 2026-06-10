@@ -81,6 +81,7 @@ import com.notayan.wallwidgy.data.mainUrl
 import com.notayan.wallwidgy.network.WallpaperApi
 import com.notayan.wallwidgy.ui.viewmodel.UiState
 import com.notayan.wallwidgy.ui.viewmodel.WallpaperViewModel
+import com.notayan.wallwidgy.ui.components.WallpaperEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -142,16 +143,6 @@ fun WallpaperDetailScreen(
     var baseBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isBitmapLoading by remember { mutableStateOf(false) }
     var editedBitmapToApply by remember { mutableStateOf<Bitmap?>(null) }
-    var activeTab by remember { mutableStateOf("Brightness") }
-
-    var brightness by remember { mutableFloatStateOf(0f) }
-    var contrast by remember { mutableFloatStateOf(1f) }
-    var saturation by remember { mutableFloatStateOf(1f) }
-
-    var cropLeft by remember { mutableFloatStateOf(0f) }
-    var cropTop by remember { mutableFloatStateOf(0f) }
-    var cropRight by remember { mutableFloatStateOf(1f) }
-    var cropBottom by remember { mutableFloatStateOf(1f) }
 
     // Intercept system back gestures to collapse bottom sheet or close editor
     BackHandler(enabled = isSheetExpanded || isEditing) {
@@ -616,13 +607,6 @@ fun WallpaperDetailScreen(
                                                     val bmp = (res.drawable as? BitmapDrawable)?.bitmap
                                                     if (bmp != null) {
                                                         baseBitmap = bmp
-                                                        brightness = 0f
-                                                        contrast = 1f
-                                                        saturation = 1f
-                                                        cropLeft = 0f
-                                                        cropTop = 0f
-                                                        cropRight = 1f
-                                                        cropBottom = 1f
                                                     }
                                                 }
                                             } catch (e: Exception) {
@@ -962,19 +946,20 @@ fun WallpaperDetailScreen(
 
         // ── Wallpaper Editor UI Overlay ──
         if (isEditing) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(if (isSystemDark) Color(0xFF0A0A0A) else Color(0xFFFAF9F6))
-                    .statusBarsPadding()
-                    .navigationBarsPadding(),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isBitmapLoading || baseBitmap == null) {
+            if (isBitmapLoading || baseBitmap == null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(if (isSystemDark) Color(0xFF0A0A0A) else Color(0xFFFAF9F6))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { /* Consume clicks */ },
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         CircularProgressIndicator(color = displayAccentColor)
                         Spacer(Modifier.height(16.dp))
@@ -984,187 +969,21 @@ fun WallpaperDetailScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
-                } else {
-                    val bitmap = baseBitmap!!
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        // Top bar
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Edit Wallpaper",
-                                color = if (isSystemDark) Color.White else Color.Black,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            
-                            IconButton(onClick = { 
-                                isEditing = false
-                                baseBitmap = null
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Cancel",
-                                    tint = if (isSystemDark) Color.White else Color.Black
-                                )
-                            }
-                        }
-
-                        // Preview Box
-                        BoxWithConstraints(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val bitmapRatio = bitmap.width.toFloat() / bitmap.height.toFloat()
-                            val maxAvailableWidth = maxWidth - 24.dp
-                            val maxAvailableHeight = maxHeight - 24.dp
-                            
-                            val containerRatio = maxAvailableWidth.value / maxAvailableHeight.value
-                            val (imageWidth, imageHeight) = if (bitmapRatio > containerRatio) {
-                                Pair(maxAvailableWidth, maxAvailableWidth / bitmapRatio)
-                            } else {
-                                Pair(maxAvailableHeight * bitmapRatio, maxAvailableHeight)
-                            }
-
-                            Box(
-                                modifier = Modifier.size(imageWidth + 24.dp, imageHeight + 24.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(imageWidth, imageHeight)
-                                        .clip(RoundedCornerShape(16.dp)),
-                                    contentScale = ContentScale.Crop,
-                                    colorFilter = ColorFilter.colorMatrix(
-                                        getAdjustedColorMatrix(brightness, contrast, saturation)
-                                    )
-                                )
-
-                                CropOverlay(
-                                    left = cropLeft,
-                                    top = cropTop,
-                                    right = cropRight,
-                                    bottom = cropBottom,
-                                    onCropChanged = { l, t, r, b ->
-                                        cropLeft = l
-                                        cropTop = t
-                                        cropRight = r
-                                        cropBottom = b
-                                    },
-                                    modifier = Modifier
-                                        .size(imageWidth, imageHeight)
-                                        .align(Alignment.Center)
-                                )
-                            }
-                        }
-
-                        // Sliders & Actions Panel
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = if (isSystemDark) Color(0xFF141414) else Color(0xFFF2F1EC),
-                            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                            border = BorderStroke(1.dp, glassBorderColor)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 24.dp, vertical = 20.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                // Tab selector
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    val tabs = listOf("Brightness", "Contrast", "Saturation")
-                                    tabs.forEach { tab ->
-                                        val isSelected = activeTab == tab
-                                        Text(
-                                            text = tab,
-                                            color = if (isSelected) {
-                                                if (isSystemDark) Color.White else Color.Black
-                                            } else {
-                                                if (isSystemDark) Color.White.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.4f)
-                                            },
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            fontSize = 14.sp,
-                                            modifier = Modifier
-                                                .clickable(
-                                                    interactionSource = remember { MutableInteractionSource() },
-                                                    indication = null
-                                                ) { activeTab = tab }
-                                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                        )
-                                    }
-                                }
-
-                                val activeDisplayValue = remember(activeTab, brightness, contrast, saturation) {
-                                    getDisplayValue(activeTab, when (activeTab) {
-                                        "Brightness" -> brightness
-                                        "Contrast" -> contrast
-                                        "Saturation" -> saturation
-                                        else -> 0f
-                                    })
-                                }
-
-                                WheelSlider(
-                                    value = activeDisplayValue,
-                                    onValueChange = { newValue ->
-                                        val floatVal = getValueFromDisplay(activeTab, newValue)
-                                        when (activeTab) {
-                                            "Brightness" -> brightness = floatVal
-                                            "Contrast" -> contrast = floatVal
-                                            "Saturation" -> saturation = floatVal
-                                        }
-                                    },
-                                    onReset = {
-                                        when (activeTab) {
-                                            "Brightness" -> brightness = 0f
-                                            "Contrast" -> contrast = 1f
-                                            "Saturation" -> saturation = 1f
-                                        }
-                                    },
-                                    isSystemDark = isSystemDark,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                Spacer(Modifier.height(8.dp))
-
-                                Button(
-                                    onClick = {
-                                        val edited = processBitmap(bitmap, cropLeft, cropTop, cropRight, cropBottom, brightness, contrast, saturation)
-                                        editedBitmapToApply = edited
-                                        showSetWallpaperDialog = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = displayAccentColor,
-                                        contentColor = if (displayAccentColor.luminance() > 0.5f) Color.Black else Color.White
-                                    ),
-                                    shape = RoundedCornerShape(28.dp),
-                                    modifier = Modifier
-                                        .align(Alignment.CenterHorizontally)
-                                        .width(180.dp)
-                                        .height(56.dp)
-                                ) {
-                                    Text("Done", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                }
-                            }
-                        }
-                    }
                 }
+            } else {
+                WallpaperEditor(
+                    bitmap = baseBitmap!!,
+                    onCancel = {
+                        isEditing = false
+                        baseBitmap = null
+                    },
+                    onDone = { edited ->
+                        editedBitmapToApply = edited
+                        showSetWallpaperDialog = true
+                    },
+                    isSystemDark = isSystemDark,
+                    accentColor = displayAccentColor
+                )
             }
         }
     }
@@ -2103,265 +1922,4 @@ private fun applyEditedUsingSystem(
     }
 }
 
-@Composable
-private fun WheelSlider(
-    value: Int,
-    onValueChange: (Int) -> Unit,
-    onReset: () -> Unit,
-    isSystemDark: Boolean,
-    modifier: Modifier = Modifier
-) {
-    var dragAccumulator by remember { mutableStateOf(0f) }
-    
-    val containerBg = if (isSystemDark) Color(0xFF1A1C18) else Color(0xFFE2E4DC)
-    val buttonBg = if (isSystemDark) Color(0xFF282A24) else Color(0xFFD2D4CA)
-    val textColor = if (isSystemDark) Color.White else Color.Black
-    val tickColor = if (isSystemDark) Color.White else Color.Black
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(72.dp)
-            .background(containerBg, RoundedCornerShape(36.dp))
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Left: Value Badge
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .background(buttonBg, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = (if (value > 0) "+$value" else value.toString()),
-                color = textColor,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-            )
-        }
-
-        // Center: Draggable tick marks
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(60.dp)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = {
-                            dragAccumulator = 0f
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            dragAccumulator += dragAmount.x
-                            val sensitivity = 6f
-                            if (Math.abs(dragAccumulator) >= sensitivity) {
-                                val units = (dragAccumulator / sensitivity).toInt()
-                                val newValue = (value + units).coerceIn(-100, 100)
-                                if (newValue != value) {
-                                    onValueChange(newValue)
-                                    dragAccumulator -= units * sensitivity
-                                }
-                            }
-                        }
-                    )
-                }
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val width = size.width
-                val height = size.height
-                val center = width / 2
-                
-                val tickSpacing = 10.dp.toPx()
-                val xOffset = dragAccumulator
-                
-                val maxTicks = (center / tickSpacing).toInt() + 2
-                val startV = value - maxTicks
-                val endV = value + maxTicks
-                
-                for (v in startV..endV) {
-                    if (v in -100..100) {
-                        val x = center + (v - value) * tickSpacing + xOffset
-                        if (x in 0f..width) {
-                            val isMajor = v % 10 == 0
-                            val isMedium = v % 5 == 0
-                            val tickHeight = when {
-                                isMajor -> height * 0.45f
-                                isMedium -> height * 0.3f
-                                else -> height * 0.18f
-                            }
-                            
-                            val alpha = when {
-                                x < width * 0.1f -> x / (width * 0.1f)
-                                x > width * 0.9f -> (width - x) / (width * 0.1f)
-                                else -> 1f
-                            }
-                            
-                            val color = if (isMajor) {
-                                tickColor.copy(alpha = 0.7f * alpha)
-                            } else {
-                                tickColor.copy(alpha = 0.35f * alpha)
-                            }
-                            val strokeWidth = if (isMajor) 2.dp.toPx() else 1.dp.toPx()
-                            
-                            drawLine(
-                                color = color,
-                                start = Offset(x, (height - tickHeight) / 2),
-                                end = Offset(x, (height + tickHeight) / 2),
-                                strokeWidth = strokeWidth
-                            )
-                        }
-                    }
-                }
-                
-                // Center pointer line
-                drawLine(
-                    color = tickColor,
-                    start = Offset(center, (height - height * 0.65f) / 2),
-                    end = Offset(center, (height + height * 0.65f) / 2),
-                    strokeWidth = 2.dp.toPx()
-                )
-            }
-        }
-
-        // Right: Reset button
-        IconButton(
-            onClick = onReset,
-            modifier = Modifier
-                .size(48.dp)
-                .background(buttonBg, CircleShape)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = "Reset",
-                tint = textColor,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
-
-private fun getDisplayValue(tab: String, value: Float): Int {
-    return when (tab) {
-        "Brightness" -> (value * 200f).toInt().coerceIn(-100, 100)
-        "Contrast" -> ((value - 1.0f) * 200f).toInt().coerceIn(-100, 100)
-        "Saturation" -> ((value - 1.0f) * 100f).toInt().coerceIn(-100, 100)
-        else -> 0
-    }
-}
-
-private fun getValueFromDisplay(tab: String, displayVal: Int): Float {
-    return when (tab) {
-        "Brightness" -> (displayVal / 200f).coerceIn(-0.5f, 0.5f)
-        "Contrast" -> (1.0f + displayVal / 200f).coerceIn(0.5f, 1.5f)
-        "Saturation" -> (1.0f + displayVal / 100f).coerceIn(0.0f, 2.0f)
-        else -> 0f
-    }
-}
-
-@Composable
-private fun CropOverlay(
-    left: Float,
-    top: Float,
-    right: Float,
-    bottom: Float,
-    onCropChanged: (Float, Float, Float, Float) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val w = maxWidth
-        val h = maxHeight
-        
-        val density = androidx.compose.ui.platform.LocalDensity.current
-        val wPx = with(density) { w.toPx() }
-        val hPx = with(density) { h.toPx() }
-        
-        val l = left * wPx
-        val t = top * hPx
-        val r = right * wPx
-        val b = bottom * hPx
-        
-        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRect(Color.Black.copy(alpha = 0.6f), size = androidx.compose.ui.geometry.Size(wPx, t))
-            drawRect(Color.Black.copy(alpha = 0.6f), topLeft = Offset(0f, b), size = androidx.compose.ui.geometry.Size(wPx, hPx - b))
-            drawRect(Color.Black.copy(alpha = 0.6f), topLeft = Offset(0f, t), size = androidx.compose.ui.geometry.Size(l, b - t))
-            drawRect(Color.Black.copy(alpha = 0.6f), topLeft = Offset(r, t), size = androidx.compose.ui.geometry.Size(wPx - r, b - t))
-            
-            drawRect(
-                color = Color.White,
-                topLeft = Offset(l, t),
-                size = androidx.compose.ui.geometry.Size(r - l, b - t),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-            )
-        }
-        
-        val handleSize = 24.dp
-        
-        Box(
-            modifier = Modifier
-                .size(handleSize)
-                .offset(w * left - handleSize/2, h * top - handleSize/2)
-                .shadow(2.dp, CircleShape)
-                .background(Color.White, CircleShape)
-                .border(2.dp, Color.Gray, CircleShape)
-                .pointerInput(w, h) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        val newL = ((left * wPx + dragAmount.x) / wPx).coerceIn(0f, right - 0.1f)
-                        val newT = ((top * hPx + dragAmount.y) / hPx).coerceIn(0f, bottom - 0.1f)
-                        onCropChanged(newL, newT, right, bottom)
-                    }
-                }
-        )
-        
-        Box(
-            modifier = Modifier
-                .size(handleSize)
-                .offset(w * right - handleSize/2, h * top - handleSize/2)
-                .shadow(2.dp, CircleShape)
-                .background(Color.White, CircleShape)
-                .border(2.dp, Color.Gray, CircleShape)
-                .pointerInput(w, h) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        val newR = ((right * wPx + dragAmount.x) / wPx).coerceIn(left + 0.1f, 1f)
-                        val newT = ((top * hPx + dragAmount.y) / hPx).coerceIn(0f, bottom - 0.1f)
-                        onCropChanged(left, newT, newR, bottom)
-                    }
-                }
-        )
-        
-        Box(
-            modifier = Modifier
-                .size(handleSize)
-                .offset(w * left - handleSize/2, h * bottom - handleSize/2)
-                .shadow(2.dp, CircleShape)
-                .background(Color.White, CircleShape)
-                .border(2.dp, Color.Gray, CircleShape)
-                .pointerInput(w, h) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        val newL = ((left * wPx + dragAmount.x) / wPx).coerceIn(0f, right - 0.1f)
-                        val newB = ((bottom * hPx + dragAmount.y) / hPx).coerceIn(top + 0.1f, 1f)
-                        onCropChanged(newL, top, right, newB)
-                    }
-                }
-        )
-        
-        Box(
-            modifier = Modifier
-                .size(handleSize)
-                .offset(w * right - handleSize/2, h * bottom - handleSize/2)
-                .shadow(2.dp, CircleShape)
-                .background(Color.White, CircleShape)
-                .border(2.dp, Color.Gray, CircleShape)
-                .pointerInput(w, h) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        val newR = ((right * wPx + dragAmount.x) / wPx).coerceIn(left + 0.1f, 1f)
-                        val newB = ((bottom * hPx + dragAmount.y) / hPx).coerceIn(top + 0.1f, 1f)
-                        onCropChanged(left, top, newR, newB)
-                    }
-                }
-        )
-    }
-}
