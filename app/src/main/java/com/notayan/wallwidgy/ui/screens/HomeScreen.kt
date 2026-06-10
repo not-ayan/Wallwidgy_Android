@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.notayan.wallwidgy.data.Wallpaper
 import com.notayan.wallwidgy.ui.components.CategoryBar
 import com.notayan.wallwidgy.ui.components.WallpaperCard
+import com.notayan.wallwidgy.ui.components.WallpaperGridSkeleton
 import com.notayan.wallwidgy.ui.viewmodel.UiState
 import com.notayan.wallwidgy.ui.viewmodel.WallpaperViewModel
 
@@ -244,9 +245,7 @@ fun HomeScreen(
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
             if (uiState is UiState.Loading && filteredWallpapers.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
+                WallpaperGridSkeleton()
             } else {
                 LazyVerticalStaggeredGrid(
                     state = gridState, // Maintains scroll position
