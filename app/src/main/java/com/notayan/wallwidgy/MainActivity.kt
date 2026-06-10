@@ -1,9 +1,11 @@
 package com.notayan.wallwidgy
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,6 +43,11 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 class MainActivity : ComponentActivity() {
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -58,6 +65,20 @@ class MainActivity : ComponentActivity() {
             ) {
                 val navController = rememberNavController()
                 val viewModel: WallpaperViewModel = viewModel(factory = factory)
+
+                LaunchedEffect(intent) {
+                    val navigateTo = intent?.getStringExtra("navigate_to")
+                    if (navigateTo == "about") {
+                        navController.navigate("about") {
+                            launchSingleTop = true
+                        }
+                    }
+                }
+
+                val context = LocalContext.current
+                LaunchedEffect(viewModel) {
+                    viewModel.checkForUpdates(context, showNotification = true)
+                }
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
                 val isSystemDark = isSystemInDarkTheme()

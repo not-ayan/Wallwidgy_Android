@@ -39,9 +39,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
-
 import kotlinx.coroutines.launch
 import com.notayan.wallwidgy.ui.viewmodel.WallpaperViewModel
+import com.notayan.wallwidgy.ui.viewmodel.UpdateState
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -129,6 +129,9 @@ fun AboutScreen(
                     }
                 }
             }
+
+            VersionUpdatesCard(viewModel = viewModel, isSystemDark = isSystemDark)
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Birthday Indicator Card
             if (isBirthday) {
@@ -1115,6 +1118,310 @@ fun AboutScreen(
                 }
             }
             Spacer(modifier = Modifier.height(48.dp))
+        }
+    }
+}
+
+@Composable
+private fun VersionUpdatesCard(
+    viewModel: WallpaperViewModel,
+    isSystemDark: Boolean
+) {
+    val context = LocalContext.current
+    val updateState by viewModel.updateState.collectAsState()
+    val currentVersion = remember { com.notayan.wallwidgy.update.UpdateManager.getCurrentVersion(context) }
+    
+    GlassyCard(isSystemDark = isSystemDark) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Wallwidgy",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSystemDark) Color.White else Color.Black
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "v$currentVersion",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Light,
+                                color = (if (isSystemDark) Color.White else Color.Black).copy(alpha = 0.5f)
+                            )
+                            
+                            Spacer(modifier = Modifier.width(8.dp))
+                            val dotColor = when (updateState) {
+                                is UpdateState.UpdateAvailable -> Color(0xFFFF9800)
+                                is UpdateState.ReadyToInstall -> Color(0xFFC7F33C)
+                                is UpdateState.Downloading -> Color(0xFF2196F3)
+                                else -> Color(0xFF4CAF50)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(dotColor)
+                            )
+                        }
+                    }
+                }
+                
+                when (updateState) {
+                    is UpdateState.Checking -> {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                    is UpdateState.UpdateAvailable -> {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFFF9800).copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.3f))
+                        ) {
+                            Text(
+                                text = "UPDATE AVAILABLE",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFF9800)
+                            )
+                        }
+                    }
+                    is UpdateState.ReadyToInstall -> {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF4CAF50).copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.3f))
+                        ) {
+                            Text(
+                                text = "READY",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                    is UpdateState.UpToDate -> {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF4CAF50).copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.25f))
+                        ) {
+                            Text(
+                                text = "UP TO DATE",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                    else -> {}
+                }
+            }
+
+            when (val state = updateState) {
+                is UpdateState.Idle -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { viewModel.checkForUpdates(context) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Check for Updates", fontWeight = FontWeight.Bold)
+                    }
+                }
+                is UpdateState.UpToDate -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "You are on the latest version of Wallwidgy.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Light,
+                        color = (if (isSystemDark) Color.White else Color.Black).copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.checkForUpdates(context) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Text("Check Again", fontWeight = FontWeight.Bold)
+                    }
+                }
+                is UpdateState.UpdateAvailable -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "A new update is available (v${state.latestVersion}).",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSystemDark) Color.White else Color.Black
+                    )
+                    if (!state.releaseNotes.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = state.releaseNotes,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Light,
+                            color = (if (isSystemDark) Color.White else Color.Black).copy(alpha = 0.7f),
+                            maxLines = 3,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.resetUpdateState() },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ) {
+                            Text("Dismiss", fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { viewModel.startDownload(context, state.downloadUrl) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(2.5f).height(44.dp)
+                        ) {
+                            Icon(Icons.Default.Download, null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Download & Install", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                is UpdateState.Downloading -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Downloading update...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isSystemDark) Color.White else Color.Black
+                        )
+                        Text(
+                            text = "${state.progress}%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { state.progress / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    )
+                }
+                is UpdateState.ReadyToInstall -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "The update is downloaded and ready to install.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isSystemDark) Color.White else Color.Black
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { viewModel.installUpdate(context, state.apkFile) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF4CAF50),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Install Now", fontWeight = FontWeight.Bold)
+                    }
+                }
+                is UpdateState.Error -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Update check failed: ${state.message}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.Red
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.resetUpdateState() },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ) {
+                            Text("Dismiss", fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { viewModel.checkForUpdates(context) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1.5f).height(44.dp)
+                        ) {
+                            Text("Retry", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                else -> {}
+            }
         }
     }
 }

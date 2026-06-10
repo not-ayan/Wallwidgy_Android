@@ -1,5 +1,6 @@
 package com.notayan.wallwidgy.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.notayan.wallwidgy.data.Wallpaper
@@ -7,11 +8,22 @@ import com.notayan.wallwidgy.network.NetworkModule
 import com.notayan.wallwidgy.repository.FavoritesRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
 
 sealed class UiState {
     object Loading : UiState()
     data class Success(val wallpapers: List<Wallpaper>) : UiState()
     data class Error(val message: String) : UiState()
+}
+
+sealed class UpdateState {
+    object Idle : UpdateState()
+    object Checking : UpdateState()
+    data class UpdateAvailable(val latestVersion: String, val downloadUrl: String, val releaseNotes: String?) : UpdateState()
+    object UpToDate : UpdateState()
+    data class Downloading(val progress: Int) : UpdateState()
+    data class ReadyToInstall(val apkFile: File) : UpdateState()
+    data class Error(val message: String) : UpdateState()
 }
 
 class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) : ViewModel() {
@@ -345,5 +357,68 @@ class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) :
     suspend fun saveThemeSettings(monetEnabled: Boolean, accentColor: Int) {
         favoritesRepository.setMonetEnabled(monetEnabled)
         favoritesRepository.setCustomAccentColor(accentColor)
+    }
+
+    private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
+
+    fun checkForUpdates(context: Context, showNotification: Boolean = false) {
+        viewModelScope.launch {
+            _updateState.value = UpdateState.Checking
+            try {
+                val release = NetworkModule.api.getLatestRelease("https://api.github.com/repos/not-ayan/Wallwidgy_Android/releases/tags/release")
+                val currentVersion = com.notayan.wallwidgy.update.UpdateManager.getCurrentVersion(context)
+                val targetVersion = release.name ?: release.tagName
+                
+                val isNew = com.notayan.wallwidgy.update.UpdateManager.isNewerVersion(currentVersion, targetVersion)
+                if (isNew) {
+                    val apkAsset = release.assets.find { it.name.endsWith(".apk") }
+                    val downloadUrl = apkAsset?.browserDownloadUrl ?: release.assets.firstOrNull()?.browserDownloadUrl
+                    
+                    if (downloadUrl != null) {
+                        _updateState.value = UpdateState.UpdateAvailable(
+                            latestVersion = targetVersion,
+                            downloadUrl = downloadUrl,
+                            releaseNotes = release.body
+                        )
+                        if (showNotification) {
+                            com.notayan.wallwidgy.update.UpdateManager.showUpdateNotification(context, targetVersion, downloadUrl)
+                        }
+                    } else {
+                        _updateState.value = UpdateState.Error("No APK file found in the latest release assets.")
+                    }
+                } else {
+                    _updateState.value = UpdateState.UpToDate
+                }
+            } catch (e: Exception) {
+                _updateState.value = UpdateState.Error(e.message ?: "Failed to check for updates")
+            }
+        }
+    }
+
+    fun startDownload(context: Context, downloadUrl: String) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _updateState.value = UpdateState.Downloading(0)
+            try {
+                val file = com.notayan.wallwidgy.update.UpdateManager.downloadApk(context, downloadUrl) { progress ->
+                    _updateState.value = UpdateState.Downloading(progress)
+                }
+                _updateState.value = UpdateState.ReadyToInstall(file)
+            } catch (e: Exception) {
+                _updateState.value = UpdateState.Error(e.message ?: "Download failed")
+            }
+        }
+    }
+
+    fun installUpdate(context: Context, file: File) {
+        try {
+            com.notayan.wallwidgy.update.UpdateManager.installApk(context, file)
+        } catch (e: Exception) {
+            _updateState.value = UpdateState.Error(e.message ?: "Failed to start installation")
+        }
+    }
+
+    fun resetUpdateState() {
+        _updateState.value = UpdateState.Idle
     }
 }
