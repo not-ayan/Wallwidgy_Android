@@ -1,0 +1,44 @@
+# Built artifacts
+bin/
+gen/
+out/
+build/
+/*/build/
+.gradle/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+cmake-build-*/
+sysroot/
+
+# Local configuration file (contains SDK path, etc.)
+local.properties
+
+# Log files
+*.log
+
+# Signing / Keystores
+*.jks
+*.keystore
+*.pk8
+*.pem
+*.p12
+*.der
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Kotlin-specific
+.kotlin/
+
+# Optional secrets files
+secrets.properties
