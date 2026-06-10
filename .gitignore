@@ -42,3 +42,6 @@ desktop.ini
 
 # Optional secrets files
 secrets.properties
+
+# Exclude release APK directory
+/app/release/
