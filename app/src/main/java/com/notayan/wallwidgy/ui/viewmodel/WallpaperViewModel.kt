@@ -8,6 +8,7 @@ import com.notayan.wallwidgy.network.NetworkModule
 import com.notayan.wallwidgy.repository.FavoritesRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.io.File
 
 sealed class UiState {
@@ -370,9 +371,10 @@ class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) :
         viewModelScope.launch {
             _updateState.value = UpdateState.Checking
             try {
-                val release = NetworkModule.api.getLatestRelease("https://api.github.com/repos/not-ayan/Wallwidgy_Android/releases/tags/release")
+                delay(800)
+                val release = NetworkModule.api.getLatestRelease("https://api.github.com/repos/not-ayan/Wallwidgy_Android/releases/latest")
                 val currentVersion = com.notayan.wallwidgy.update.UpdateManager.getCurrentVersion(context)
-                val targetVersion = release.name ?: release.tagName
+                val targetVersion = release.tagName
                 
                 val isNew = com.notayan.wallwidgy.update.UpdateManager.isNewerVersion(currentVersion, targetVersion)
                 if (isNew) {

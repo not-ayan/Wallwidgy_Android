@@ -1253,6 +1253,29 @@ private fun VersionUpdatesCard(
             }
 
             when (val state = updateState) {
+                is UpdateState.Checking -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Checking repositories for updates...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Light,
+                            color = (if (isSystemDark) Color.White else Color.Black).copy(alpha = 0.6f)
+                        )
+                    }
+                }
                 is UpdateState.Idle -> {
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(

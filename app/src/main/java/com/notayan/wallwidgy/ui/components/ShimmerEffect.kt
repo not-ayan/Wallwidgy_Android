@@ -55,23 +55,28 @@ fun Modifier.shimmerEffect(): Modifier = composed {
 
 @Composable
 fun WallpaperGridSkeleton(
+    isDesktopSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val skeletonItems = remember {
-        listOf(
-            0.7f,   // Mobile
-            1.77f,  // Desktop
-            0.7f,   // Mobile
-            0.7f,   // Mobile
-            1.77f,  // Desktop
-            0.7f,   // Mobile
-            0.7f,   // Mobile
-            1.77f   // Desktop
-        )
+    val skeletonItems = remember(isDesktopSelected) {
+        if (isDesktopSelected) {
+            List(8) { 1.77f }
+        } else {
+            listOf(
+                0.7f,   // Mobile
+                1.77f,  // Desktop
+                0.7f,   // Mobile
+                0.7f,   // Mobile
+                1.77f,  // Desktop
+                0.7f,   // Mobile
+                0.7f,   // Mobile
+                1.77f   // Desktop
+            )
+        }
     }
 
     LazyVerticalStaggeredGrid(
-        columns = StaggeredGridCells.Fixed(2),
+        columns = if (isDesktopSelected) StaggeredGridCells.Fixed(1) else StaggeredGridCells.Fixed(2),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalItemSpacing = 16.dp,

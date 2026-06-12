@@ -50,6 +50,8 @@ fun HomeScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val availableCategories by viewModel.availableCategories.collectAsState()
 
+    val isDesktopSelected = selectedOrientation == "Desktop"
+
     var showSearch by remember { mutableStateOf(false) }
     
     // LazyGridState is remembered across recompositions
@@ -246,11 +248,11 @@ fun HomeScreen(
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
             if (uiState is UiState.Loading && filteredWallpapers.isEmpty()) {
-                WallpaperGridSkeleton()
+                WallpaperGridSkeleton(isDesktopSelected = isDesktopSelected)
             } else {
                 LazyVerticalStaggeredGrid(
                     state = gridState, // Maintains scroll position
-                    columns = StaggeredGridCells.Fixed(2),
+                    columns = if (isDesktopSelected) StaggeredGridCells.Fixed(1) else StaggeredGridCells.Fixed(2),
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 34.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalItemSpacing = 16.dp,
