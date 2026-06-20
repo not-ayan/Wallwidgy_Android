@@ -35,5 +35,6 @@ data class WallpaperMetadata(
     @SerialName("color_palette") val colorPalette: String? = null,
     val mood: String? = null,
     val category: String? = null,
-    val tags: List<String>? = null
+    val tags: List<String>? = null,
+    @SerialName("scene_description") val sceneDescription: String? = null
 )

@@ -6,10 +6,15 @@ import androidx.lifecycle.viewModelScope
 import com.notayan.wallwidgy.data.Wallpaper
 import com.notayan.wallwidgy.network.NetworkModule
 import com.notayan.wallwidgy.repository.FavoritesRepository
+import com.notayan.wallwidgy.search.SearchEngine
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.io.File
+import androidx.work.*
+import java.util.concurrent.TimeUnit
+import com.notayan.wallwidgy.worker.AutoWallpaperWorker
+import java.util.concurrent.ConcurrentHashMap
 
 sealed class UiState {
     object Loading : UiState()
@@ -25,6 +30,13 @@ sealed class UpdateState {
     data class Downloading(val progress: Int) : UpdateState()
     data class ReadyToInstall(val apkFile: File) : UpdateState()
     data class Error(val message: String) : UpdateState()
+}
+
+sealed class ModelState {
+    object NotDownloaded : ModelState()
+    data class Downloading(val progress: Int) : ModelState()
+    object Ready : ModelState()
+    data class Error(val message: String) : ModelState()
 }
 
 class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) : ViewModel() {
@@ -61,6 +73,34 @@ class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) :
     val recentColors = favoritesRepository.recentColors
         .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(0xFF4C663B.toInt(), 0xFF2196F3.toInt(), 0xFFE91E63.toInt(), 0xFF9C27B0.toInt(), 0xFFFF9800.toInt()))
 
+    val rotationEnabled = favoritesRepository.rotationEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val rotationMode = favoritesRepository.rotationMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "random")
+
+    val rotationValue = favoritesRepository.rotationValue
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    val rotationDuration = favoritesRepository.rotationDuration
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 24)
+
+    val rotationTarget = favoritesRepository.rotationTarget
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "both")
+
+    val rotationLastTime = favoritesRepository.rotationLastTime
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+
+    val semanticSearchEnabled = favoritesRepository.semanticSearchEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val _semanticModelState = MutableStateFlow<ModelState>(ModelState.NotDownloaded)
+    val semanticModelState: StateFlow<ModelState> = _semanticModelState.asStateFlow()
+
+    private var searchEngine: SearchEngine? = null
+    private val wallpaperEmbeddings = ConcurrentHashMap<String, FloatArray>()
+    private val isEmbeddingGenerationInProgress = MutableStateFlow(false)
+
     private val _allWallpapers = MutableStateFlow<List<Wallpaper>>(emptyList())
 
     val wallpaperCount = _allWallpapers
@@ -78,14 +118,10 @@ class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) :
         _allWallpapers,
         _searchQuery,
         _selectedCategories,
-        _selectedOrientation
-    ) { all, query, categories, orientation ->
-        all.filter { wallpaper ->
-            val matchesSearch = if (query.isEmpty()) true else {
-                wallpaper.category.contains(query, ignoreCase = true) ||
-                wallpaper.data?.tags?.any { it.contains(query, ignoreCase = true) } == true ||
-                wallpaper.data?.title?.contains(query, ignoreCase = true) == true
-            }
+        _selectedOrientation,
+        favoritesRepository.semanticSearchEnabled
+    ) { all, query, categories, orientation, useSemantic ->
+        val filtered = all.filter { wallpaper ->
             val matchesCategory = if (categories.isEmpty()) true else {
                 val cleanWallpaperCategory = wallpaper.category.removePrefix("#").trim().lowercase()
                 categories.any { selected ->
@@ -95,13 +131,51 @@ class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) :
             val matchesOrientation = if (orientation == null) true else {
                 wallpaper.orientation.equals(orientation, ignoreCase = true)
             }
-            matchesSearch && matchesCategory && matchesOrientation
+            matchesCategory && matchesOrientation
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        if (query.isEmpty()) {
+            filtered
+        } else {
+            val engine = searchEngine
+            if (useSemantic && engine != null) {
+                val queryEmbedding = engine.embed(query)
+                if (queryEmbedding != null) {
+                    filtered.map { wallpaper ->
+                        val embedding = wallpaperEmbeddings[wallpaper.fileName]
+                        val keywordScore = getKeywordMatchScore(wallpaper, query)
+                        val semanticScore = if (embedding != null) {
+                            SearchEngine.cosineSimilarity(queryEmbedding, embedding)
+                        } else {
+                            if (keywordScore > 0.0) 0.3 else 0.0
+                        }
+                        wallpaper to (semanticScore + keywordScore)
+                    }
+                    .filter { it.second >= 0.20 }
+                    .sortedByDescending { it.second }
+                    .map { it.first }
+                } else {
+                    filtered.filter { wallpaper ->
+                        wallpaper.category.contains(query, ignoreCase = true) ||
+                        wallpaper.data?.tags?.any { it.contains(query, ignoreCase = true) } == true ||
+                        wallpaper.data?.title?.contains(query, ignoreCase = true) == true
+                    }
+                }
+            } else {
+                filtered.filter { wallpaper ->
+                    wallpaper.category.contains(query, ignoreCase = true) ||
+                    wallpaper.data?.tags?.any { it.contains(query, ignoreCase = true) } == true ||
+                    wallpaper.data?.title?.contains(query, ignoreCase = true) == true
+                }
+            }
+        }
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
+     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
         observeIndicesAndFetch()
         observeFavorites()
+        initSearchEngineFromPreferences()
     }
 
     private fun observeIndicesAndFetch() {
@@ -364,6 +438,67 @@ class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) :
         favoritesRepository.setCustomAccentColor(accentColor)
     }
 
+    fun setRotationEnabled(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            favoritesRepository.setRotationEnabled(enabled)
+            val duration = rotationDuration.value
+            scheduleAutoWallpaper(context, enabled, duration)
+        }
+    }
+
+    fun setRotationMode(mode: String) {
+        viewModelScope.launch {
+            favoritesRepository.setRotationMode(mode)
+        }
+    }
+
+    fun setRotationValue(value: String) {
+        viewModelScope.launch {
+            favoritesRepository.setRotationValue(value)
+        }
+    }
+
+    fun setRotationDuration(context: Context, durationHours: Int) {
+        viewModelScope.launch {
+            favoritesRepository.setRotationDuration(durationHours)
+            val enabled = rotationEnabled.value
+            scheduleAutoWallpaper(context, enabled, durationHours)
+        }
+    }
+
+    fun setRotationTarget(target: String) {
+        viewModelScope.launch {
+            favoritesRepository.setRotationTarget(target)
+        }
+    }
+
+    fun scheduleAutoWallpaper(context: Context, enabled: Boolean, durationHours: Int) {
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelUniqueWork("AutoWallpaperRotation")
+        if (enabled) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+            val workRequest = PeriodicWorkRequestBuilder<AutoWallpaperWorker>(
+                durationHours.toLong(), TimeUnit.HOURS
+            )
+                .setConstraints(constraints)
+                .build()
+            workManager.enqueueUniquePeriodicWork(
+                "AutoWallpaperRotation",
+                ExistingPeriodicWorkPolicy.UPDATE,
+                workRequest
+            )
+        }
+    }
+
+    fun rotateNow(context: Context) {
+        val workManager = WorkManager.getInstance(context)
+        val workRequest = OneTimeWorkRequestBuilder<AutoWallpaperWorker>()
+            .build()
+        workManager.enqueue(workRequest)
+    }
+
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
@@ -426,5 +561,193 @@ class WallpaperViewModel(private val favoritesRepository: FavoritesRepository) :
 
     fun resetUpdateState() {
         _updateState.value = UpdateState.Idle
+    }
+
+    private fun initSearchEngineFromPreferences() {
+        viewModelScope.launch {
+            favoritesRepository.semanticSearchEnabled.collectLatest { enabled ->
+                if (enabled) {
+                    initSearchEngineAndGenerateEmbeddings(favoritesRepository.context)
+                } else {
+                    searchEngine?.close()
+                    searchEngine = null
+                    _semanticModelState.value = ModelState.NotDownloaded
+                    wallpaperEmbeddings.clear()
+                }
+            }
+        }
+        
+        viewModelScope.launch {
+            _allWallpapers.collectLatest { wallpapers ->
+                val engine = searchEngine
+                if (engine != null && wallpapers.isNotEmpty()) {
+                    generateEmbeddingsForAllWallpapers(engine)
+                }
+            }
+        }
+    }
+
+    private fun initSearchEngineAndGenerateEmbeddings(context: Context) {
+        val modelFile = File(context.filesDir, "universal_sentence_encoder.tflite")
+        if (modelFile.exists()) {
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                val engine = synchronized(this@WallpaperViewModel) {
+                    if (searchEngine == null) {
+                        searchEngine = SearchEngine.create(context, modelFile)
+                    }
+                    searchEngine
+                }
+                if (engine != null) {
+                    _semanticModelState.value = ModelState.Ready
+                    generateEmbeddingsForAllWallpapers(engine)
+                } else {
+                    _semanticModelState.value = ModelState.Error("Failed to initialize search engine.")
+                }
+            }
+        } else {
+            _semanticModelState.value = ModelState.NotDownloaded
+        }
+    }
+
+    private suspend fun generateEmbeddingsForAllWallpapers(engine: SearchEngine) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        if (isEmbeddingGenerationInProgress.value) return@withContext
+        isEmbeddingGenerationInProgress.value = true
+        try {
+            val wallpapers = _allWallpapers.value
+            for (wallpaper in wallpapers) {
+                if (!wallpaperEmbeddings.containsKey(wallpaper.fileName)) {
+                    val text = getSearchTextForWallpaper(wallpaper)
+                    val embedding = engine.embed(text)
+                    if (embedding != null) {
+                        wallpaperEmbeddings[wallpaper.fileName] = embedding
+                    }
+                }
+            }
+        } finally {
+            isEmbeddingGenerationInProgress.value = false
+        }
+    }
+
+    private fun getSearchTextForWallpaper(wallpaper: Wallpaper): String {
+        val sb = StringBuilder()
+        wallpaper.data?.title?.let { sb.append(it).append(" ") }
+        sb.append(wallpaper.category.removePrefix("#")).append(" ")
+        wallpaper.data?.series?.let { sb.append(it).append(" ") }
+        wallpaper.data?.artStyle?.let { sb.append(it).append(" ") }
+        wallpaper.data?.mood?.let { sb.append(it).append(" ") }
+        wallpaper.data?.characterNames?.forEach { sb.append(it).append(" ") }
+        wallpaper.data?.primaryColors?.forEach { sb.append(it).append(" ") }
+        wallpaper.data?.tags?.forEach { sb.append(it).append(" ") }
+        wallpaper.data?.sceneDescription?.let { sb.append(it).append(" ") }
+        return sb.toString().trim()
+    }
+
+    private fun getKeywordMatchScore(wallpaper: Wallpaper, query: String): Double {
+        val cleanQuery = query.lowercase().trim()
+        if (cleanQuery.isEmpty()) return 0.0
+        
+        val title = wallpaper.data?.title?.lowercase() ?: ""
+        val category = wallpaper.category.lowercase()
+        val tags = wallpaper.data?.tags?.map { it.lowercase() } ?: emptyList()
+        
+        // Exact full match boost
+        if (title.contains(cleanQuery) || category.contains(cleanQuery) || tags.any { it.contains(cleanQuery) }) {
+            return 0.5
+        }
+        
+        // Individual word match boosts
+        val words = cleanQuery.split("\\s+".toRegex()).filter { it.length > 2 }
+        if (words.isEmpty()) return 0.0
+        var matchCount = 0
+        for (word in words) {
+            if (title.contains(word) || category.contains(word) || tags.any { it.contains(word) }) {
+                matchCount++
+            }
+        }
+        return (matchCount.toDouble() / words.size) * 0.3
+    }
+
+    fun downloadSemanticModel(context: Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _semanticModelState.value = ModelState.Downloading(0)
+            try {
+                val urlString = "https://storage.googleapis.com/mediapipe-models/text_embedder/universal_sentence_encoder/float32/1/universal_sentence_encoder.tflite"
+                val request = okhttp3.Request.Builder().url(urlString).build()
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) throw java.io.IOException("Failed to download model: $response")
+                val body = response.body ?: throw java.io.IOException("Response body is null")
+                
+                val localFile = File(context.filesDir, "universal_sentence_encoder.tflite")
+                val tempFile = File(context.filesDir, "universal_sentence_encoder.tflite.tmp")
+                if (tempFile.exists()) tempFile.delete()
+                
+                val totalBytes = body.contentLength()
+                var bytesDownloaded = 0L
+                
+                body.byteStream().use { input ->
+                    tempFile.outputStream().use { output ->
+                        val buffer = ByteArray(16384)
+                        var bytesRead = input.read(buffer)
+                        while (bytesRead != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            bytesDownloaded += bytesRead
+                            val progress = if (totalBytes > 0) (bytesDownloaded * 100 / totalBytes).toInt() else -1
+                            _semanticModelState.value = ModelState.Downloading(progress)
+                            bytesRead = input.read(buffer)
+                        }
+                    }
+                }
+                
+                if (localFile.exists()) localFile.delete()
+                if (!tempFile.renameTo(localFile)) {
+                    throw java.io.IOException("Failed to rename temp file to destination")
+                }
+                
+                // Initialize model and start embedding generation
+                initSearchEngineAndGenerateEmbeddings(context)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _semanticModelState.value = ModelState.Error(e.message ?: "Download failed")
+            }
+        }
+    }
+
+    fun deleteSemanticModel(context: Context) {
+        viewModelScope.launch {
+            favoritesRepository.setSemanticSearchEnabled(false)
+            searchEngine?.close()
+            searchEngine = null
+            _semanticModelState.value = ModelState.NotDownloaded
+            wallpaperEmbeddings.clear()
+            
+            val localFile = File(context.filesDir, "universal_sentence_encoder.tflite")
+            if (localFile.exists()) {
+                localFile.delete()
+            }
+        }
+    }
+
+    fun setSemanticSearchEnabled(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            favoritesRepository.setSemanticSearchEnabled(enabled)
+            if (enabled) {
+                val localFile = File(context.filesDir, "universal_sentence_encoder.tflite")
+                if (localFile.exists()) {
+                    initSearchEngineAndGenerateEmbeddings(context)
+                } else {
+                    downloadSemanticModel(context)
+                }
+            } else {
+                searchEngine?.close()
+                searchEngine = null
+                _semanticModelState.value = ModelState.NotDownloaded
+                wallpaperEmbeddings.clear()
+            }
+        }
     }
 }

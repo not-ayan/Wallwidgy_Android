@@ -45,3 +45,6 @@ secrets.properties
 
 # Exclude release APK directory
 /app/release/
+
+#ignore
+antigravity_state.md

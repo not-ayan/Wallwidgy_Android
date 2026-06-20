@@ -42,6 +42,7 @@ import java.util.Calendar
 import kotlinx.coroutines.launch
 import com.notayan.wallwidgy.ui.viewmodel.WallpaperViewModel
 import com.notayan.wallwidgy.ui.viewmodel.UpdateState
+import com.notayan.wallwidgy.ui.viewmodel.ModelState
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -758,6 +759,116 @@ fun AboutScreen(
                                         Text("Save & Restart", fontWeight = FontWeight.Bold)
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // SECTION: Smart Semantic Search
+                SectionContainer(
+                    icon = Icons.Default.Psychology,
+                    title = "Smart Semantic Search",
+                    subtitle = "AI-powered conceptual search engine",
+                    isSystemDark = isSystemDark
+                ) {
+                    GlassyCard(isSystemDark = isSystemDark) {
+                        val semanticEnabled by viewModel.semanticSearchEnabled.collectAsState()
+                        val modelState by viewModel.semanticModelState.collectAsState()
+
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text(
+                                text = "Enable concept-based search using an on-device text embedding model. This allows finding wallpapers by meaning (e.g., searching \"forest\" matches trees, \"kitty\" matches cats) instead of exact keywords.",
+                                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                                fontWeight = FontWeight.Light,
+                                color = (if (isSystemDark) Color.White else Color.Black).copy(alpha = 0.8f)
+                            )
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isSystemDark) 0.1f else 0.2f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isSystemDark) 0.15f else 0.3f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Smart Search",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSystemDark) Color.White else Color.Black
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = when (modelState) {
+                                            is ModelState.NotDownloaded -> "Model not downloaded (~15MB)"
+                                            is ModelState.Downloading -> "Downloading model: ${(modelState as ModelState.Downloading).progress}%"
+                                            is ModelState.Ready -> "Model ready. Offline search active."
+                                            is ModelState.Error -> "Error: ${(modelState as ModelState.Error).message}"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = (if (isSystemDark) Color.White else Color.Black).copy(alpha = 0.5f)
+                                    )
+                                }
+                                Switch(
+                                    checked = semanticEnabled,
+                                    onCheckedChange = { checked ->
+                                        viewModel.setSemanticSearchEnabled(context, checked)
+                                    },
+                                    enabled = modelState !is ModelState.Downloading,
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                        checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                    )
+                                )
+                            }
+
+                            if (modelState is ModelState.Ready) {
+                                Button(
+                                    onClick = { viewModel.deleteSemanticModel(context) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.Red.copy(alpha = 0.1f),
+                                        contentColor = Color.Red
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.2f)),
+                                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                                ) {
+                                    Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Delete Model & Free Storage", fontWeight = FontWeight.Bold)
+                                }
+                            } else if (modelState is ModelState.Error || modelState is ModelState.NotDownloaded) {
+                                if (semanticEnabled) {
+                                    Button(
+                                        onClick = { viewModel.downloadSemanticModel(context) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                                    ) {
+                                        Icon(Icons.Default.Download, null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Retry Model Download", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else if (modelState is ModelState.Downloading) {
+                                LinearProgressIndicator(
+                                    progress = { (modelState as ModelState.Downloading).progress / 100f },
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp))
+                                )
                             }
                         }
                     }

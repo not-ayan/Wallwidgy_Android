@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "favorites")
 
-class FavoritesRepository(private val context: Context) {
+class FavoritesRepository(val context: Context) {
     private val FAVORITES_KEY = stringSetPreferencesKey("favorites_list")
     private val DEFAULT_INDEX_ENABLED_KEY = booleanPreferencesKey("default_index_enabled")
     private val CUSTOM_INDICES_KEY = stringSetPreferencesKey("custom_indices")
@@ -21,6 +21,13 @@ class FavoritesRepository(private val context: Context) {
     private val MONET_ENABLED_KEY = booleanPreferencesKey("monet_enabled")
     private val CUSTOM_ACCENT_COLOR_KEY = androidx.datastore.preferences.core.intPreferencesKey("custom_accent_color")
     private val RECENT_COLORS_KEY = androidx.datastore.preferences.core.stringPreferencesKey("recent_colors_csv")
+    private val ROTATION_ENABLED_KEY = booleanPreferencesKey("rotation_enabled")
+    private val ROTATION_MODE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("rotation_mode")
+    private val ROTATION_VALUE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("rotation_value")
+    private val ROTATION_DURATION_KEY = androidx.datastore.preferences.core.intPreferencesKey("rotation_duration")
+    private val ROTATION_TARGET_KEY = androidx.datastore.preferences.core.stringPreferencesKey("rotation_target")
+    private val ROTATION_LAST_TIME_KEY = androidx.datastore.preferences.core.longPreferencesKey("rotation_last_time")
+    private val SEMANTIC_SEARCH_ENABLED_KEY = booleanPreferencesKey("semantic_search_enabled")
 
     val favorites: Flow<Set<String>> = context.dataStore.data
         .map { preferences ->
@@ -63,6 +70,48 @@ class FavoritesRepository(private val context: Context) {
             val csv = preferences[RECENT_COLORS_KEY] ?: "0xFF4C663B,0xFF2196F3,0xFFE91E63,0xFF9C27B0,0xFFFF9800"
             csv.split(",")
                 .mapNotNull { it.trim().substringAfter("0x").toLongOrNull(16)?.toInt() }
+        }
+        .distinctUntilChanged()
+
+    val rotationEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[ROTATION_ENABLED_KEY] ?: false
+        }
+        .distinctUntilChanged()
+
+    val rotationMode: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[ROTATION_MODE_KEY] ?: "random"
+        }
+        .distinctUntilChanged()
+
+    val rotationValue: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[ROTATION_VALUE_KEY] ?: ""
+        }
+        .distinctUntilChanged()
+
+    val rotationDuration: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[ROTATION_DURATION_KEY] ?: 24
+        }
+        .distinctUntilChanged()
+
+    val rotationTarget: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[ROTATION_TARGET_KEY] ?: "both"
+        }
+        .distinctUntilChanged()
+
+    val rotationLastTime: Flow<Long> = context.dataStore.data
+        .map { preferences ->
+            preferences[ROTATION_LAST_TIME_KEY] ?: 0L
+        }
+        .distinctUntilChanged()
+
+    val semanticSearchEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[SEMANTIC_SEARCH_ENABLED_KEY] ?: false
         }
         .distinctUntilChanged()
 
@@ -165,6 +214,48 @@ class FavoritesRepository(private val context: Context) {
             // Keep maximum 5 recent colors
             val updatedList = list.take(5)
             preferences[RECENT_COLORS_KEY] = updatedList.joinToString(",")
+        }
+    }
+
+    suspend fun setRotationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[ROTATION_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setRotationMode(mode: String) {
+        context.dataStore.edit { preferences ->
+            preferences[ROTATION_MODE_KEY] = mode
+        }
+    }
+
+    suspend fun setRotationValue(value: String) {
+        context.dataStore.edit { preferences ->
+            preferences[ROTATION_VALUE_KEY] = value
+        }
+    }
+
+    suspend fun setRotationDuration(duration: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[ROTATION_DURATION_KEY] = duration
+        }
+    }
+
+    suspend fun setRotationTarget(target: String) {
+        context.dataStore.edit { preferences ->
+            preferences[ROTATION_TARGET_KEY] = target
+        }
+    }
+
+    suspend fun setRotationLastTime(time: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[ROTATION_LAST_TIME_KEY] = time
+        }
+    }
+
+    suspend fun setSemanticSearchEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SEMANTIC_SEARCH_ENABLED_KEY] = enabled
         }
     }
 }

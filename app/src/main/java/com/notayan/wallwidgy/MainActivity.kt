@@ -19,9 +19,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -40,6 +42,7 @@ import com.notayan.wallwidgy.ui.screens.FavoritesScreen
 import com.notayan.wallwidgy.ui.screens.HomeScreen
 import com.notayan.wallwidgy.ui.screens.WallpaperDetailScreen
 import com.notayan.wallwidgy.ui.screens.AboutScreen
+import com.notayan.wallwidgy.ui.screens.AutoWallpaperScreen
 import com.notayan.wallwidgy.ui.theme.WallwidgyTheme
 import com.notayan.wallwidgy.ui.viewmodel.WallpaperViewModel
 import com.notayan.wallwidgy.ui.viewmodel.WallpaperViewModelFactory
@@ -136,6 +139,22 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                                 NavigationBarItem(
+                                    selected = currentRoute == "rotate",
+                                    onClick = { 
+                                        if (currentRoute != "rotate") {
+                                            navController.navigate("rotate") {
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    },
+                                    icon = { 
+                                        Icon(
+                                            if (currentRoute == "rotate") Icons.Default.Autorenew else Icons.Outlined.Autorenew, 
+                                            contentDescription = "Rotate"
+                                        ) 
+                                    }
+                                )
+                                NavigationBarItem(
                                     selected = currentRoute == "about",
                                     onClick = { 
                                         if (currentRoute != "about") {
@@ -189,6 +208,13 @@ class MainActivity : ComponentActivity() {
                                     e.printStackTrace()
                                 }
                             }
+                        }
+                        composable(
+                            route = "rotate",
+                            enterTransition = { fadeIn(animationSpec = tween(220, easing = LinearOutSlowInEasing)) },
+                            exitTransition = { fadeOut(animationSpec = tween(220, easing = FastOutLinearInEasing)) }
+                        ) {
+                            AutoWallpaperScreen(viewModel = viewModel)
                         }
                         composable(
                             route = "about",
